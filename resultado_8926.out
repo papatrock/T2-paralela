@@ -1,0 +1,6 @@
+Job iniciado em: Fri Jun 20 15:50:16 UTC 2025
+Nos alocados: node[0-1]
+Total de tasks: 2
+Sou o rank 0 e estou rodando no host: node0
+Sou o rank 1 e estou rodando no host: node1
+Job finalizado em: Fri Jun 20 15:50:17 UTC 2025

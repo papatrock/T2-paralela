@@ -21,6 +21,6 @@ echo "Total de tasks: $SLURM_NTASKS"
 
 # O mpirun usa a variavel $SLURM_NTASKS que o SLURM cria automaticamente.
 # O --map-by garante a distribuicao de 1 processo por no.
-mpirun -np $SLURM_NTASKS ./pi-mpi-reduce
+mpirun -np $SLURM_NTASKS ./alive
 
 echo "Job finalizado em: $(date)"

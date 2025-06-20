@@ -96,6 +96,7 @@ int LCS(mtype **scoreMatrix, int sizeA, int sizeB, char *seqA, char *seqB)
 
   for (int d = 0; d < totalDiagonals; ++d) // percorre as diagonais
   {
+
     for (bi = 0; bi <= d; ++bi) // uma thread pega o 0, outra a 1 .... até d
     {
 
