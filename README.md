@@ -1,6 +1,8 @@
-# Resumo das Principais Funções MPI em C (Open MPI)
+# Comp e run
+mpicc -o lcs-mpi lcs-mpi.c
+mpirun --hostfile <hosts_file> –np <# processos> <binary>
 
-Este é um guia de referência rápida para as funções mais comuns usadas na programação paralela com MPI em C.
+
 
 ## 1. Gerenciamento do Ambiente MPI
 
