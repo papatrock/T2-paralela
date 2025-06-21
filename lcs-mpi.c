@@ -108,122 +108,111 @@ void initScoreMatrix(mtype **scoreMatrix, int sizeA, int sizeB)
         scoreMatrix[i][0] = 0;
 }
 
-int LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, char *seqB, int sizeB)
+mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, char *seqB, int sizeB)
 {
-
-    // setup cart
     MPI_Comm comm_cart;
     int ndims = 2, dims[2] = {2, 3}, periods[2] = {0, 0}, reorder = 1;
-    MPI_Cart_create(MPI_COMM_WORLD, ndims, dims, periods, reorder, &comm_cart);
+    MPI_Cart_create(comm_world, ndims, dims, periods, reorder, &comm_cart);
 
     if (comm_cart == MPI_COMM_NULL)
-        return 0; // TODO verificar esse retorno
+        return 0;
 
     int my_cart_rank, my_coords[2];
     MPI_Comm_rank(comm_cart, &my_cart_rank);
     MPI_Cart_coords(comm_cart, my_cart_rank, ndims, my_coords);
 
-    // Descobre vizinhos
     int rank_up, rank_down, rank_left, rank_right;
     MPI_Cart_shift(comm_cart, 0, 1, &rank_up, &rank_down);
     MPI_Cart_shift(comm_cart, 1, 1, &rank_left, &rank_right);
 
-    // aloca dados locais
-    // assim nao precisa alocar uma matriz tao grande, cada processo aloca um pedaço
-    int start_col = (my_coords[1] * (sizeA + 1)) / dims[1];
-    int end_col = ((my_coords[1] + 1) * (sizeA + 1)) / dims[1] - 1;
+    int size_A_borda = sizeA + 1;
+    int size_B_borda = sizeB + 1;
+    int start_col = (my_coords[1] * size_A_borda) / dims[1];
+    int end_col = ((my_coords[1] + 1) * size_A_borda) / dims[1] - 1;
     int local_cols = end_col - start_col + 1;
-
-    int start_row = (my_coords[0] * (sizeB + 1)) / dims[0];
-    int end_row = ((my_coords[0] + 1) * (sizeB + 1)) / dims[0] - 1;
+    int start_row = (my_coords[0] * size_B_borda) / dims[0];
+    int end_row = ((my_coords[0] + 1) * size_B_borda) / dims[0] - 1;
     int local_rows = end_row - start_row + 1;
-
-    if (my_rank == 0)
-    { // debug
-        printf("Tamanho da matriz global: %d x %d\n", sizeB + 1, sizeA + 1);
-    }
-    printf("Tamanho do bloco local por processo: %d x %d\n", local_rows, local_cols);
-
     mtype **matriz_local = alocar_matriz_local(local_rows, local_cols);
-
-    mtype top_buffer[local_cols];
-    mtype left_buffer[local_rows];
 
     int total_diagonals = dims[0] + dims[1] - 1;
 
-    // processos da borda nao esperam dados
-    if (rank_up != MPI_PROC_NULL)
+    for (int d = 0; d < total_diagonals; d++)
     {
-        MPI_Recv(&matriz_local[0][1], local_cols, MPI_UNSIGNED_SHORT, rank_up, 0, comm_cart, MPI_STATUS_IGNORE);
-    }
-
-    if (rank_left != MPI_PROC_NULL)
-    {
-        // dataType novo pra receber a coluna
-        MPI_Datatype col_type;
-        MPI_Type_vector(local_rows, 1, local_cols + 2, MPI_UNSIGNED_SHORT, &col_type);
-        MPI_Type_commit(&col_type);
-        MPI_Recv(&matriz_local[1][0], 1, col_type, rank_left, 0, comm_cart, MPI_STATUS_IGNORE);
-        MPI_Type_free(&col_type);
-    }
-
-    // calcula bloco local
-    for (int i = 1; i <= local_rows; i++)
-    {
-        for (int j = 1; j <= local_cols; j++)
+        // Apenas os processos na diagonal 'd' atual são "ativos"
+        if (my_coords[0] + my_coords[1] == d)
         {
-            int global_j = start_col + j - 1;
-            int global_i = start_row + i - 1;
 
-            if (global_j < sizeA && global_i < sizeB && seqA[global_j] == seqB[global_i])
+            // recebe dados dos vizinhos (esperando pela tag da onda atual 'd')
+            if (rank_up != MPI_PROC_NULL)
             {
-                matriz_local[i][j] = matriz_local[i - 1][j - 1] + 1;
+                MPI_Recv(&matriz_local[0][1], local_cols, MPI_UNSIGNED_SHORT, rank_up, d, comm_cart, MPI_STATUS_IGNORE);
             }
-            else
+            if (rank_left != MPI_PROC_NULL)
             {
-                matriz_local[i][j] = max(matriz_local[i - 1][j], matriz_local[i][j - 1]);
+                MPI_Datatype col_type;
+                MPI_Type_vector(local_rows, 1, local_cols + 2, MPI_UNSIGNED_SHORT, &col_type);
+                MPI_Type_commit(&col_type);
+                MPI_Recv(&matriz_local[1][0], 1, col_type, rank_left, d, comm_cart, MPI_STATUS_IGNORE);
+                MPI_Type_free(&col_type);
+            }
+
+            // calc o bloco local
+            for (int i = 1; i <= local_rows; i++)
+            {
+                for (int j = 1; j <= local_cols; j++)
+                {
+                    int global_j = start_col + j - 1;
+                    int global_i = start_row + i - 1;
+                    if (global_j < sizeA && global_i < sizeB && seqA[global_j] == seqB[global_i])
+                    {
+                        matriz_local[i][j] = matriz_local[i - 1][j - 1] + 1;
+                    }
+                    else
+                    {
+                        matriz_local[i][j] = max(matriz_local[i - 1][j], matriz_local[i][j - 1]);
+                    }
+                }
+            }
+
+            // envia dados para os vizinhos (com a tag da próxima onda 'd+1')
+            if (rank_down != MPI_PROC_NULL)
+            {
+                MPI_Send(&matriz_local[local_rows][1], local_cols, MPI_UNSIGNED_SHORT, rank_down, d + 1, comm_cart);
+            }
+            if (rank_right != MPI_PROC_NULL)
+            {
+                MPI_Datatype col_type;
+                MPI_Type_vector(local_rows, 1, local_cols + 2, MPI_UNSIGNED_SHORT, &col_type);
+                MPI_Type_commit(&col_type);
+                MPI_Send(&matriz_local[1][local_cols], 1, col_type, rank_right, d + 1, comm_cart);
+                MPI_Type_free(&col_type);
             }
         }
-    }
-    // envia dados, se nao for a borda
-    if (rank_down != MPI_PROC_NULL)
-    {
-        MPI_Send(&matriz_local[local_rows][1], local_cols, MPI_UNSIGNED_SHORT, rank_down, 0, comm_cart);
-    }
-
-    if (rank_right != MPI_PROC_NULL)
-    {
-        // Prepara o buffer com a última coluna calculada
-        MPI_Datatype col_type;
-        MPI_Type_vector(local_rows, 1, local_cols + 2, MPI_UNSIGNED_SHORT, &col_type);
-        MPI_Type_commit(&col_type);
-        MPI_Send(&matriz_local[1][local_cols], 1, col_type, rank_right, 0, comm_cart);
-        MPI_Type_free(&col_type);
     }
 
     mtype final_score = 0;
 
-    // O processo no canto inferior direito tem o resultado final
-    if (rank_down == MPI_PROC_NULL && rank_right == MPI_PROC_NULL)
+    // O processo no canto inferior direito tem o resultado.
+    if (my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1)
     {
         final_score = matriz_local[local_rows][local_cols];
-        // Se este processo não for o rank 0, envie o resultado para ele
+        // Se este processo não for o rank 0, envie o resultado para ele.
         if (my_rank != 0)
         {
-            MPI_Send(&final_score, 1, MPI_UNSIGNED_SHORT, 0, 0, comm_world);
+            MPI_Send(&final_score, 1, MPI_UNSIGNED_SHORT, 0, 999, comm_world);
         }
     }
 
-    // O Rank 0 (global) recebe o resultado final se ele não for o último processo.
-    if (my_rank == 0 && (rank_down != MPI_PROC_NULL || rank_right != MPI_PROC_NULL))
+    // Rank 0 recebe o resultado, se ele não for o último processo.
+    if (my_rank == 0 && !(my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1))
     {
         int rank_do_ultimo_proc;
         int coords_do_ultimo[2] = {dims[0] - 1, dims[1] - 1};
         MPI_Cart_rank(comm_cart, coords_do_ultimo, &rank_do_ultimo_proc);
-        MPI_Recv(&final_score, 1, MPI_UNSIGNED_SHORT, rank_do_ultimo_proc, 0, comm_world, MPI_STATUS_IGNORE);
+        MPI_Recv(&final_score, 1, MPI_UNSIGNED_SHORT, rank_do_ultimo_proc, 999, comm_world, MPI_STATUS_IGNORE);
     }
 
-    // limpeza
     for (int i = 0; i < local_rows + 2; i++)
         free(matriz_local[i]);
     free(matriz_local);

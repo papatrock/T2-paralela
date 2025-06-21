@@ -1,0 +1,86 @@
+Job iniciado em: Sat Jun 21 17:35:47 UTC 2025
+Nos alocados: node[5-6]
+Total de tasks: 6
+free(): invalid next size (fast)
+[node5:319259] *** Process received signal ***
+[node5:319259] Signal: Aborted (6)
+[node5:319259] Signal code:  (-6)
+[node5:319259] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x45330)[0x79d497128330]
+[node5:319259] [ 1] free(): invalid next size (fast)
+/lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x11c)[0x79d497181b2c]
+[node5:319259] [ 2] /lib/x86_64-linux-gnu/libc.so.6(gsignal+0x1e)[0x79d49712827e]
+[node5:319259] [ 3] [node6:381298] *** Process received signal ***
+[node6:381298] Signal: Aborted (6)
+[node6:381298] Signal code:  (-6)
+/lib/x86_64-linux-gnu/libc.so.6(abort+0xdf)[0x79d49710b8ff]
+[node5:319259] [ 4] /lib/x86_64-linux-gnu/libc.so.6(+0x297b6)[0x79d49710c7b6]
+[node5:319259] [ 5] /lib/x86_64-linux-gnu/libc.so.6(+0xa8ff5)[0x79d49718bff5]
+[node5:319259] [ 6] [node6:381298] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0xab3ec)[0x79d49718e3ec]
+[node5:319259] [ 7] /lib/x86_64-linux-gnu/libc.so.6(+0x45330)[0x7b578d5d4330]
+[node6:381298] [ 1] /lib/x86_64-linux-gnu/libc.so.6(__libc_free+0x7e)[0x79d497190dae]
+[node5:319259] [ 8] ./lcs-mpi(+0x1eef)[0x620c753eaeef]
+[node5:319259] [ 9] ./lcs-mpi(+0x22aa)[0x620c753eb2aa]
+[node5:319259] [10] /lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x11c)[0x7b578d62db2c]
+[node6:381298] [ 2] /lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca)[0x79d49710d1ca]
+[node5:319259] [11] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b)[0x79d49710d28b]
+[node5:319259] [12] ./lcs-mpi(+0x14a5)[0x620c753ea4a5]
+[node5:319259] *** End of error message ***
+/lib/x86_64-linux-gnu/libc.so.6(gsignal+0x1e)[0x7b578d5d427e]
+[node6:381298] [ 3] /lib/x86_64-linux-gnu/libc.so.6(abort+0xdf)[0x7b578d5b78ff]
+[node6:381298] [ 4] /lib/x86_64-linux-gnu/libc.so.6(+0x297b6)[0x7b578d5b87b6]
+[node6:381298] [ 5] /lib/x86_64-linux-gnu/libc.so.6(+0xa8ff5)[0x7b578d637ff5]
+[node6:381298] [ 6] /lib/x86_64-linux-gnu/libc.so.6(+0xab3ec)[0x7b578d63a3ec]
+[node6:381298] [ 7] /lib/x86_64-linux-gnu/libc.so.6(__libc_free+0x7e)[0x7b578d63cdae]
+[node6:381298] [ 8] ./lcs-mpi(+0x1eef)[0x652a50175eef]
+[node6:381298] [ 9] ./lcs-mpi(+0x22aa)[0x652a501762aa]
+[node6:381298] [10] /lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca)[0x7b578d5b91ca]
+[node6:381298] [11] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b)[0x7b578d5b928b]
+[node6:381298] [12] ./lcs-mpi(+0x14a5)[0x652a501754a5]
+[node6:381298] *** End of error message ***
+free(): invalid next size (fast)
+[node5:319260] *** Process received signal ***
+[node5:319260] Signal: Aborted (6)
+[node5:319260] Signal code:  (-6)
+[node5:319260] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x45330)[0x7c4598270330]
+[node5:319260] [ 1] /lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x11c)[0x7c45982c9b2c]
+[node5:319260] [ 2] /lib/x86_64-linux-gnu/libc.so.6(gsignal+0x1e)[0x7c459827027e]
+[node5:319260] [ 3] /lib/x86_64-linux-gnu/libc.so.6(abort+0xdf)[0x7c45982538ff]
+[node5:319260] [ 4] /lib/x86_64-linux-gnu/libc.so.6(+0x297b6)[0x7c45982547b6]
+[node5:319260] [ 5] /lib/x86_64-linux-gnu/libc.so.6(+0xa8ff5)[0x7c45982d3ff5]
+[node5:319260] [ 6] /lib/x86_64-linux-gnu/libc.so.6(+0xab3ec)[0x7c45982d63ec]
+[node5:319260] [ 7] /lib/x86_64-linux-gnu/libc.so.6(__libc_free+0x7e)[0x7c45982d8dae]
+[node5:319260] [ 8] ./lcs-mpi(+0x1eef)[0x6400beea7eef]
+[node5:319260] [ 9] ./lcs-mpi(+0x22aa)[0x6400beea82aa]
+[node5:319260] [10] /lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca)[0x7c45982551ca]
+[node5:319260] [11] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b)[0x7c459825528b]
+[node5:319260] [12] ./lcs-mpi(+0x14a5)[0x6400beea74a5]
+[node5:319260] *** End of error message ***
+
+Score: 3
+Tempo de execução: 0.014313 segundos
+free(): invalid next size (fast)
+[node6:381299] *** Process received signal ***
+[node6:381299] Signal: Aborted (6)
+[node6:381299] Signal code:  (-6)
+[node6:381299] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x45330)[0x76557bc1c330]
+[node6:381299] [ 1] /lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x11c)[0x76557bc75b2c]
+[node6:381299] [ 2] /lib/x86_64-linux-gnu/libc.so.6(gsignal+0x1e)[0x76557bc1c27e]
+[node6:381299] [ 3] /lib/x86_64-linux-gnu/libc.so.6(abort+0xdf)[0x76557bbff8ff]
+[node6:381299] [ 4] /lib/x86_64-linux-gnu/libc.so.6(+0x297b6)[0x76557bc007b6]
+[node6:381299] [ 5] /lib/x86_64-linux-gnu/libc.so.6(+0xa8ff5)[0x76557bc7fff5]
+[node6:381299] [ 6] /lib/x86_64-linux-gnu/libc.so.6(+0xab3ec)[0x76557bc823ec]
+[node6:381299] [ 7] /lib/x86_64-linux-gnu/libc.so.6(__libc_free+0x7e)[0x76557bc84dae]
+[node6:381299] [ 8] ./lcs-mpi(+0x1eef)[0x5c8a0fb56eef]
+[node6:381299] [ 9] ./lcs-mpi(+0x22aa)[0x5c8a0fb572aa]
+[node6:381299] [10] /lib/x86_64-linux-gnu/libc.so.6(+0x2a1ca)[0x76557bc011ca]
+[node6:381299] [11] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x8b)[0x76557bc0128b]
+[node6:381299] [12] ./lcs-mpi(+0x14a5)[0x5c8a0fb564a5]
+[node6:381299] *** End of error message ***
+--------------------------------------------------------------------------
+Primary job  terminated normally, but 1 process returned
+a non-zero exit code. Per user-direction, the job has been aborted.
+--------------------------------------------------------------------------
+--------------------------------------------------------------------------
+mpirun noticed that process rank 1 with PID 0 on node node5 exited on signal 6 (Aborted).
+--------------------------------------------------------------------------
+Job finalizado em: Sat Jun 21 17:35:50 UTC 2025
