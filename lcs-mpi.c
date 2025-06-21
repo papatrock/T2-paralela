@@ -14,52 +14,39 @@ typedef unsigned short mtype;
 
 char *read_seq(char *fname)
 {
-    // file pointer
-    FILE *fseq = NULL;
-    // sequence size
-    long size = 0;
-    // sequence pointer
-    char *seq = NULL;
-    // sequence index
-    int i = 0;
-
-    // open file
-    fseq = fopen(fname, "rt");
+    FILE *fseq = fopen(fname, "rt");
     if (fseq == NULL)
     {
-        printf("Error reading file %s\n", fname);
-        exit(1);
+        perror("Erro ao abrir o arquivo");
+        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
     }
 
-    // find out sequence size to allocate memory afterwards
     fseek(fseq, 0L, SEEK_END);
-    size = ftell(fseq);
+    long size = ftell(fseq);
     rewind(fseq);
 
-    // allocate memory (sequence)
-    seq = (char *)calloc(size + 1, sizeof(char));
+    char *seq = (char *)calloc(size + 1, sizeof(char));
     if (seq == NULL)
     {
-        printf("Erro allocating memory for sequence %s.\n", fname);
-        exit(1);
+        perror("Erro ao alocar memoria para sequencia");
+        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
     }
 
-    // read sequence from file
-    while (!feof(fseq))
+    int i = 0;
+    int c;
+    while ((c = fgetc(fseq)) != EOF)
     {
-        seq[i] = fgetc(fseq);
-        if ((seq[i] != '\n') && (seq[i] != EOF))
-            i++;
+        if (c != '\n' && c != '\r')
+        {
+            seq[i++] = c;
+        }
     }
-    // insert string terminator
     seq[i] = '\0';
 
-    // close file
     fclose(fseq);
-
-    // return sequence pointer
     return seq;
 }
+
 // substiruido pelo alocar matriz local
 mtype **allocateScoreMatrix(int sizeA, int sizeB)
 {
@@ -110,10 +97,11 @@ void initScoreMatrix(mtype **scoreMatrix, int sizeA, int sizeB)
 
 mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, char *seqB, int sizeB)
 {
+
+    // setup cart
     MPI_Comm comm_cart;
     int ndims = 2, dims[2] = {2, 3}, periods[2] = {0, 0}, reorder = 1;
     MPI_Cart_create(comm_world, ndims, dims, periods, reorder, &comm_cart);
-
     if (comm_cart == MPI_COMM_NULL)
         return 0;
 
@@ -122,9 +110,10 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
     MPI_Cart_coords(comm_cart, my_cart_rank, ndims, my_coords);
 
     int rank_up, rank_down, rank_left, rank_right;
-    MPI_Cart_shift(comm_cart, 0, 1, &rank_up, &rank_down);
-    MPI_Cart_shift(comm_cart, 1, 1, &rank_left, &rank_right);
+    MPI_Cart_shift(comm_cart, 0, -1, &rank_down, &rank_up);
+    MPI_Cart_shift(comm_cart, 1, -1, &rank_right, &rank_left);
 
+    // --- alocacao local ---
     int size_A_borda = sizeA + 1;
     int size_B_borda = sizeB + 1;
     int start_col = (my_coords[1] * size_A_borda) / dims[1];
@@ -136,28 +125,25 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
     mtype **matriz_local = alocar_matriz_local(local_rows, local_cols);
 
     int total_diagonals = dims[0] + dims[1] - 1;
-
     for (int d = 0; d < total_diagonals; d++)
     {
-        // Apenas os processos na diagonal 'd' atual são "ativos"
         if (my_coords[0] + my_coords[1] == d)
         {
-
-            // recebe dados dos vizinhos (esperando pela tag da onda atual 'd')
             if (rank_up != MPI_PROC_NULL)
             {
-                MPI_Recv(&matriz_local[0][1], local_cols, MPI_UNSIGNED_SHORT, rank_up, d, comm_cart, MPI_STATUS_IGNORE);
+                mtype temp_row_buffer[local_cols];
+                MPI_Recv(temp_row_buffer, local_cols, MPI_UNSIGNED_SHORT, rank_up, d, comm_cart, MPI_STATUS_IGNORE);
+                for (int j = 0; j < local_cols; ++j)
+                    matriz_local[0][j + 1] = temp_row_buffer[j];
             }
             if (rank_left != MPI_PROC_NULL)
             {
-                MPI_Datatype col_type;
-                MPI_Type_vector(local_rows, 1, local_cols + 2, MPI_UNSIGNED_SHORT, &col_type);
-                MPI_Type_commit(&col_type);
-                MPI_Recv(&matriz_local[1][0], 1, col_type, rank_left, d, comm_cart, MPI_STATUS_IGNORE);
-                MPI_Type_free(&col_type);
+                mtype temp_col_buffer[local_rows];
+                MPI_Recv(temp_col_buffer, local_rows, MPI_UNSIGNED_SHORT, rank_left, d, comm_cart, MPI_STATUS_IGNORE);
+                for (int i = 0; i < local_rows; ++i)
+                    matriz_local[i + 1][0] = temp_col_buffer[i];
             }
 
-            // calc o bloco local
             for (int i = 1; i <= local_rows; i++)
             {
                 for (int j = 1; j <= local_cols; j++)
@@ -175,44 +161,43 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
                 }
             }
 
-            // envia dados para os vizinhos (com a tag da próxima onda 'd+1')
             if (rank_down != MPI_PROC_NULL)
             {
                 MPI_Send(&matriz_local[local_rows][1], local_cols, MPI_UNSIGNED_SHORT, rank_down, d + 1, comm_cart);
             }
             if (rank_right != MPI_PROC_NULL)
             {
-                MPI_Datatype col_type;
-                MPI_Type_vector(local_rows, 1, local_cols + 2, MPI_UNSIGNED_SHORT, &col_type);
-                MPI_Type_commit(&col_type);
-                MPI_Send(&matriz_local[1][local_cols], 1, col_type, rank_right, d + 1, comm_cart);
-                MPI_Type_free(&col_type);
+                mtype temp_col_buffer[local_rows];
+                for (int i = 0; i < local_rows; ++i)
+                    temp_col_buffer[i] = matriz_local[i + 1][local_cols];
+                MPI_Send(temp_col_buffer, local_rows, MPI_UNSIGNED_SHORT, rank_right, d + 1, comm_cart);
             }
         }
+        MPI_Barrier(comm_cart);
     }
 
+    // --- COLETA DO RESULTADO FINAL ---
     mtype final_score = 0;
-
-    // O processo no canto inferior direito tem o resultado.
     if (my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1)
     {
         final_score = matriz_local[local_rows][local_cols];
-        // Se este processo não for o rank 0, envie o resultado para ele.
         if (my_rank != 0)
         {
             MPI_Send(&final_score, 1, MPI_UNSIGNED_SHORT, 0, 999, comm_world);
         }
     }
-
-    // Rank 0 recebe o resultado, se ele não for o último processo.
-    if (my_rank == 0 && !(my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1))
+    if (my_rank == 0)
     {
-        int rank_do_ultimo_proc;
-        int coords_do_ultimo[2] = {dims[0] - 1, dims[1] - 1};
-        MPI_Cart_rank(comm_cart, coords_do_ultimo, &rank_do_ultimo_proc);
-        MPI_Recv(&final_score, 1, MPI_UNSIGNED_SHORT, rank_do_ultimo_proc, 999, comm_world, MPI_STATUS_IGNORE);
+        if (!(my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1))
+        {
+            int rank_do_ultimo_proc;
+            int coords_do_ultimo[2] = {dims[0] - 1, dims[1] - 1};
+            MPI_Cart_rank(comm_cart, coords_do_ultimo, &rank_do_ultimo_proc);
+            MPI_Recv(&final_score, 1, MPI_UNSIGNED_SHORT, rank_do_ultimo_proc, 999, comm_world, MPI_STATUS_IGNORE);
+        }
     }
 
+    // --- LIMPEZA ---
     for (int i = 0; i < local_rows + 2; i++)
         free(matriz_local[i]);
     free(matriz_local);
@@ -322,5 +307,5 @@ int main(int argc, char **argv)
     free(seqA);
     free(seqB);
     MPI_Finalize();
-    return 0;
+    return EXIT_SUCCESS;
 }

@@ -181,9 +181,9 @@ int main(int argc, char **argv)
 
     // print score
     double tempoFinal = fim - inicio;
-    // printf("\nScore: %d tempo: %0.8f\n", score, tempoFinal);
-    printf("%0.8f", tempoFinal);
-    // free score matrix
+    printf("\nScore: %d tempo: %0.8f\n", score, tempoFinal);
+    // printf("%0.8f", tempoFinal);
+    //  free score matrix
     freeScoreMatrix(scoreMatrix, sizeB);
 
     return EXIT_SUCCESS;

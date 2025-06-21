@@ -1,5 +1,5 @@
 # Comp e run
-mpicc alive.c -o alive
+mpicc lcs-mpi.c -o lcs-mpi
 mpirun --hostfile <hosts_file> –np <# processos> <binary>
 
 
