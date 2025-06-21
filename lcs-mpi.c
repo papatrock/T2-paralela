@@ -60,7 +60,7 @@ char *read_seq(char *fname)
     // return sequence pointer
     return seq;
 }
-
+// substiruido pelo alocar matriz local
 mtype **allocateScoreMatrix(int sizeA, int sizeB)
 {
     int i;
@@ -69,6 +69,31 @@ mtype **allocateScoreMatrix(int sizeA, int sizeB)
     for (i = 0; i < (sizeB + 1); i++)
         scoreMatrix[i] = (mtype *)malloc((sizeA + 1) * sizeof(mtype));
     return scoreMatrix;
+}
+
+// TODO modificar alocação da matriz para o metodo mazieiro
+mtype **alocar_matriz_local(int n_rows, int n_cols)
+{
+    // n_rows e n_cols + 2 : coluna e linhas que vão receber (ou que são 0)
+    mtype **matrix = (mtype **)malloc((n_rows + 2) * sizeof(mtype *));
+    if (matrix == NULL)
+    {
+        perror("Falha ao  alocar matriz local");
+        MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+    }
+
+    // Aloca a memória para cada linha da matriz
+    for (int i = 0; i < n_rows + 2; i++)
+    {
+
+        matrix[i] = (mtype *)calloc((n_cols + 2), sizeof(mtype));
+        if (matrix[i] == NULL)
+        {
+            perror("Falha ao  alocar matriz local");
+            MPI_Abort(MPI_COMM_WORLD, EXIT_FAILURE);
+        }
+    }
+    return matrix;
 }
 
 void initScoreMatrix(mtype **scoreMatrix, int sizeA, int sizeB)
@@ -83,61 +108,128 @@ void initScoreMatrix(mtype **scoreMatrix, int sizeA, int sizeB)
         scoreMatrix[i][0] = 0;
 }
 
-int LCS(mtype **scoreMatrix, int sizeA, int sizeB, char *seqA, char *seqB)
+int LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, char *seqB, int sizeB)
 {
-  int bi, bj, i, j;
 
-  int numThreads = omp_get_max_threads();
-  int blockSize = calculateBlockSize(sizeA, sizeB, numThreads);
+    // setup cart
+    MPI_Comm comm_cart;
+    int ndims = 2, dims[2] = {2, 3}, periods[2] = {0, 0}, reorder = 1;
+    MPI_Cart_create(MPI_COMM_WORLD, ndims, dims, periods, reorder, &comm_cart);
 
-  int numBlockRows = (sizeB + blockSize - 1) / blockSize; // (7+4-1) / 4  = 2
-  int numBlockCols = (sizeA + blockSize - 1) / blockSize; // (10 + 4 - 1) / 4 = 3
-  int totalDiagonals = numBlockRows + numBlockCols - 1;   // 4 + 10 - 1
+    if (comm_cart == MPI_COMM_NULL)
+        return 0; // TODO verificar esse retorno
 
-  for (int d = 0; d < totalDiagonals; ++d) // percorre as diagonais
-  {
+    int my_cart_rank, my_coords[2];
+    MPI_Comm_rank(comm_cart, &my_cart_rank);
+    MPI_Cart_coords(comm_cart, my_cart_rank, ndims, my_coords);
 
-    for (bi = 0; bi <= d; ++bi) // uma thread pega o 0, outra a 1 .... até d
-    {
+    // Descobre vizinhos
+    int rank_up, rank_down, rank_left, rank_right;
+    MPI_Cart_shift(comm_cart, 0, 1, &rank_up, &rank_down);
+    MPI_Cart_shift(comm_cart, 1, 1, &rank_left, &rank_right);
 
-      bj = d - bi;
+    // aloca dados locais
+    // assim nao precisa alocar uma matriz tao grande, cada processo aloca um pedaço
+    int start_col = (my_coords[1] * (sizeA + 1)) / dims[1];
+    int end_col = ((my_coords[1] + 1) * (sizeA + 1)) / dims[1] - 1;
+    int local_cols = end_col - start_col + 1;
 
-      if (bi < numBlockRows && bj < numBlockCols)
-      {
-        int startRow = bi * blockSize + 1;
-        int endRow = (bi + 1) * blockSize;
-        int startCol = bj * blockSize + 1;
-        int endCol = (bj + 1) * blockSize;
+    int start_row = (my_coords[0] * (sizeB + 1)) / dims[0];
+    int end_row = ((my_coords[0] + 1) * (sizeB + 1)) / dims[0] - 1;
+    int local_rows = end_row - start_row + 1;
 
-        if (endRow > sizeB)
-          endRow = sizeB;
-        if (endCol > sizeA)
-          endCol = sizeA;
-
-#ifdef DEBUGMATRIX
-        printf("thread:%d processando o bloco: bi=%d bj=%d, linhas %d–%d, colunas %d–%d\n", omp_get_thread_num(), bi, bj, startRow, endRow, startCol, endCol);
-#endif
-
-        for (i = startRow; i <= endRow; ++i)
-        {
-          for (j = startCol; j <= endCol; ++j)
-          {
-#ifdef DEBUGMATRIX
-            printf("%c == %c ?\n", seqA[j - 1], seqB[i - 1]);
-#endif
-            if (seqA[j - 1] == seqB[i - 1])
-              scoreMatrix[i][j] = scoreMatrix[i - 1][j - 1] + 1;
-            else
-              scoreMatrix[i][j] = (scoreMatrix[i - 1][j] > scoreMatrix[i][j - 1])
-                                      ? scoreMatrix[i - 1][j]
-                                      : scoreMatrix[i][j - 1];
-          }
-        }
-      }
+    if (my_rank == 0)
+    { // debug
+        printf("Tamanho da matriz global: %d x %d\n", sizeB + 1, sizeA + 1);
     }
-  }
+    printf("Tamanho do bloco local por processo: %d x %d\n", local_rows, local_cols);
 
-  return scoreMatrix[sizeB][sizeA];
+    mtype **matriz_local = alocar_matriz_local(local_rows, local_cols);
+
+    mtype top_buffer[local_cols];
+    mtype left_buffer[local_rows];
+
+    int total_diagonals = dims[0] + dims[1] - 1;
+
+    // processos da borda nao esperam dados
+    if (rank_up != MPI_PROC_NULL)
+    {
+        MPI_Recv(&matriz_local[0][1], local_cols, MPI_UNSIGNED_SHORT, rank_up, 0, comm_cart, MPI_STATUS_IGNORE);
+    }
+
+    if (rank_left != MPI_PROC_NULL)
+    {
+        // dataType novo pra receber a coluna
+        MPI_Datatype col_type;
+        MPI_Type_vector(local_rows, 1, local_cols + 2, MPI_UNSIGNED_SHORT, &col_type);
+        MPI_Type_commit(&col_type);
+        MPI_Recv(&matriz_local[1][0], 1, col_type, rank_left, 0, comm_cart, MPI_STATUS_IGNORE);
+        MPI_Type_free(&col_type);
+    }
+
+    // calcula bloco local
+    for (int i = 1; i <= local_rows; i++)
+    {
+        for (int j = 1; j <= local_cols; j++)
+        {
+            int global_j = start_col + j - 1;
+            int global_i = start_row + i - 1;
+
+            if (global_j < sizeA && global_i < sizeB && seqA[global_j] == seqB[global_i])
+            {
+                matriz_local[i][j] = matriz_local[i - 1][j - 1] + 1;
+            }
+            else
+            {
+                matriz_local[i][j] = max(matriz_local[i - 1][j], matriz_local[i][j - 1]);
+            }
+        }
+    }
+    // envia dados, se nao for a borda
+    if (rank_down != MPI_PROC_NULL)
+    {
+        MPI_Send(&matriz_local[local_rows][1], local_cols, MPI_UNSIGNED_SHORT, rank_down, 0, comm_cart);
+    }
+
+    if (rank_right != MPI_PROC_NULL)
+    {
+        // Prepara o buffer com a última coluna calculada
+        MPI_Datatype col_type;
+        MPI_Type_vector(local_rows, 1, local_cols + 2, MPI_UNSIGNED_SHORT, &col_type);
+        MPI_Type_commit(&col_type);
+        MPI_Send(&matriz_local[1][local_cols], 1, col_type, rank_right, 0, comm_cart);
+        MPI_Type_free(&col_type);
+    }
+
+    mtype final_score = 0;
+
+    // O processo no canto inferior direito tem o resultado final
+    if (rank_down == MPI_PROC_NULL && rank_right == MPI_PROC_NULL)
+    {
+        final_score = matriz_local[local_rows][local_cols];
+        // Se este processo não for o rank 0, envie o resultado para ele
+        if (my_rank != 0)
+        {
+            MPI_Send(&final_score, 1, MPI_UNSIGNED_SHORT, 0, 0, comm_world);
+        }
+    }
+
+    // O Rank 0 (global) recebe o resultado final se ele não for o último processo.
+    if (my_rank == 0 && (rank_down != MPI_PROC_NULL || rank_right != MPI_PROC_NULL))
+    {
+        int rank_do_ultimo_proc;
+        int coords_do_ultimo[2] = {dims[0] - 1, dims[1] - 1};
+        MPI_Cart_rank(comm_cart, coords_do_ultimo, &rank_do_ultimo_proc);
+        MPI_Recv(&final_score, 1, MPI_UNSIGNED_SHORT, rank_do_ultimo_proc, 0, comm_world, MPI_STATUS_IGNORE);
+    }
+
+    // limpeza
+    for (int i = 0; i < local_rows + 2; i++)
+        free(matriz_local[i]);
+    free(matriz_local);
+    MPI_Comm_free(&comm_cart);
+
+    return final_score;
 }
 
 void printMatrix(char *seqA, char *seqB, mtype **scoreMatrix, int sizeA,
@@ -183,49 +275,63 @@ void freeScoreMatrix(mtype **scoreMatrix, int sizeB)
 // mpicc -o lcs-mpi lcs-mpi.c
 int main(int argc, char **argv)
 {
-    // -----coisas do mpi ----
     int my_rank, n_procs;
-    MPI_Init(argc, argv);
+
+    MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
     MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
-
-    //-------------------------
 
     // sequence pointers for both sequences
     char *seqA, *seqB;
 
     // sizes of both sequences
-    int sizeA, sizeB;
+    int global_sizes[2];
 
-    // read both sequences
-    seqA = read_seq(argv[1]);
-    seqB = read_seq(argv[2]);
+    // só o rank 0 le os dados e depois transmite
+    if (my_rank == 0)
+    {
+        seqA = read_seq(argv[1]);
+        seqB = read_seq(argv[2]);
 
-    // find out sizes
-    sizeA = strlen(seqA);
-    sizeB = strlen(seqB);
+        global_sizes[0] = strlen(seqA);
+        global_sizes[1] = strlen(seqB);
+    }
+
+    MPI_Bcast(global_sizes, 2, MPI_INT, 0, MPI_COMM_WORLD);
+    int sizeA = global_sizes[0];
+    int sizeB = global_sizes[1];
+
+    if (my_rank != 0)
+    {
+        seqA = (char *)malloc((sizeA + 1) * sizeof(char));
+        seqB = (char *)malloc((sizeB + 1) * sizeof(char));
+    }
+
+    MPI_Bcast(seqA, sizeA + 1, MPI_CHAR, 0, MPI_COMM_WORLD);
+    MPI_Bcast(seqB, sizeB + 1, MPI_CHAR, 0, MPI_COMM_WORLD);
+
     // allocate LCS score matrix
-    mtype **scoreMatrix = allocateScoreMatrix(sizeA, sizeB);
+    // agora é alocado por cada nó
+    // mtype **scoreMatrix = allocateScoreMatrix(sizeA, sizeB);
 
     // initialize LCS score matrix
-    initScoreMatrix(scoreMatrix, sizeA, sizeB);
+    // initScoreMatrix(scoreMatrix, sizeA, sizeB);
 
     // fill up the rest of the matrix and return final score (element locate at the last line and collumn)
-    double inicio = omp_get_wtime();
-    mtype score = LCS(scoreMatrix, sizeA, sizeB, seqA, seqB);
-    double fim = omp_get_wtime();
-    /* if you wish to see the entire score matrix,
-     for debug purposes, define DEBUGMATRIX. */
-#ifdef DEBUGMATRIX
-    printMatrix(seqA, seqB, scoreMatrix, sizeA, sizeB);
-#endif
+    // int LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, char *seqB, int sizeB)
+    double start_time = MPI_Wtime();
+    mtype score = LCS(MPI_COMM_WORLD, my_rank, n_procs, seqA, sizeA, seqB, sizeB);
+    double end_time = MPI_Wtime();
 
     // print score
-    double tempoFinal = fim - inicio;
-    // printf("\nScore: %d tempo: %0.8f\n", score, tempoFinal);
-    printf("%0.8f", tempoFinal);
-    // free score matrix
-    freeScoreMatrix(scoreMatrix, sizeB);
-
-    return EXIT_SUCCESS;
+    // double tempoFinal = fim - inicio;
+    if (my_rank == 0)
+    {
+        printf("\nScore: %d\n", score);
+        printf("Tempo de execução: %f segundos\n", end_time - start_time);
+    }
+    free(seqA);
+    free(seqB);
+    MPI_Finalize();
+    return 0;
 }
