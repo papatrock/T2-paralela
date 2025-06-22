@@ -151,6 +151,7 @@ void freeScoreMatrix(mtype **scoreMatrix, int sizeB)
 //-DDEBUGMATRIX
 int main(int argc, char **argv)
 {
+    double tempoTotalInicio = omp_get_wtime();
     // sequence pointers for both sequences
     char *seqA, *seqB;
 
@@ -183,9 +184,12 @@ int main(int argc, char **argv)
     // print score
     double tempoFinal = fim - inicio;
     // printf("\nScore: %d tempo: %0.8f\n", score, tempoFinal);
-    printf("%0.8f\n", tempoFinal);
+    // printf("%0.8f\n", tempoFinal);
     //  free score matrix
     freeScoreMatrix(scoreMatrix, sizeB);
+    double tempoTotalFim = omp_get_wtime();
+    double fracSequencial = (tempoTotalFim - tempoTotalInicio) - tempoFinal;
+    printf("%0.8f\n", fracSequencial);
 
     return EXIT_SUCCESS;
 }

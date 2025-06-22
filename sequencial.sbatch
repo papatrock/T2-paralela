@@ -9,4 +9,4 @@
 # Nome do arquivo de saida. %j sera o ID do seu job.
 #SBATCH --output=/dev/null
 
-./lcs-seq entradas/20k_A.in entradas/20k_B.in >> saidas/tempo_sequencial_20k.out
+./lcs-seq entradas/60k_A.in entradas/60k_B.in >> saidas/frac_sequencial/60k.out
