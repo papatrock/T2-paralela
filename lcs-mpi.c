@@ -123,8 +123,6 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
     int local_rows = end_row - start_row + 1;
     mtype **matriz_local = alocar_matriz_local(local_rows, local_cols);
 
-    // int total_diagonals = dims[0] + dims[1] - 1;
-
     for (int bi = 0; bi < dims[0]; bi++)
     {
         for (int bj = 0; bj < dims[1]; bj++)
@@ -132,7 +130,7 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
             // Verifica se EU sou o processo responsável por este bloco
             if (my_coords[0] == bi && my_coords[1] == bj)
             {
-                // 1. RECEBE dados se não estiver na borda global
+                // recebe dados se não estiver na borda global
                 if (rank_up != MPI_PROC_NULL)
                 {
                     MPI_Recv(&matriz_local[0][1], local_cols, MPI_UNSIGNED_SHORT, rank_up, 0, comm_cart, MPI_STATUS_IGNORE);
@@ -145,7 +143,7 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
                         matriz_local[i + 1][0] = temp_col_buffer[i];
                 }
 
-                // 2. CALCULA o bloco local
+                // calc o bloco local
                 for (int i = 1; i <= local_rows; i++)
                 {
                     for (int j = 1; j <= local_cols; j++)
@@ -163,7 +161,7 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
                     }
                 }
 
-                // 3. ENVIA dados se não estiver na borda global
+                // envia dados se não estiver na borda global
                 if (rank_down != MPI_PROC_NULL)
                 {
                     MPI_Send(&matriz_local[local_rows][1], local_cols, MPI_UNSIGNED_SHORT, rank_down, 0, comm_cart);
@@ -178,8 +176,9 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
             }
         }
     }
-    // ... O resto da função (coleta de resultado e limpeza) continua igual ...
+
     mtype final_score = 0;
+
     if (my_rank == 0)
     {
         if (my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1)
