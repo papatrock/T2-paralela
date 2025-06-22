@@ -12,7 +12,7 @@
 #SBATCH --ntasks-per-node=3
 
 # Nome do arquivo de saida. %j sera o ID do seu job.
-#SBATCH --output=saida_%j.out
+#SBATCH --output=/dev/null
 
 
 #echo "Job iniciado em: $(date)"
@@ -21,6 +21,6 @@
 
 # O mpirun usa a variavel $SLURM_NTASKS que o SLURM cria automaticamente.
 # O --map-by garante a distribuicao de 1 processo por no.
-mpirun -np $SLURM_NTASKS ./lcs-mpi entradas/5k_A.in entradas/5k_B.in
+mpirun -np $SLURM_NTASKS ./lcs-mpi entradas/40k_A.in entradas/40k_B.in >> saidas/escalabilidade_fraca/4_40k.out
 
 #echo "Job finalizado em: $(date)"

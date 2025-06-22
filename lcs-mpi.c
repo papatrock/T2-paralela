@@ -99,7 +99,9 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
 {
     // setup chart
     MPI_Comm comm_cart;
-    int ndims = 2, dims[2] = {2, 3}, periods[2] = {0, 0}, reorder = 1;
+    int ndims = 2, dims[2] = {0, 0}, periods[2] = {0, 0}, reorder = 1;
+    // modifica o array 'dims' com base no 'n_procs'.
+    MPI_Dims_create(n_procs, ndims, dims);
     MPI_Cart_create(comm_world, ndims, dims, periods, reorder, &comm_cart);
     if (comm_cart == MPI_COMM_NULL)
         return 0;
