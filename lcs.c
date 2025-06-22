@@ -147,7 +147,8 @@ void freeScoreMatrix(mtype **scoreMatrix, int sizeB)
     free(scoreMatrix);
 }
 
-// gcc -DDEBUGMATRIX -fopenmp lcs.c -o lcs
+// gcc lcs.c -fopenmp -O3 -o lcs-seq
+//-DDEBUGMATRIX
 int main(int argc, char **argv)
 {
     // sequence pointers for both sequences
@@ -181,8 +182,8 @@ int main(int argc, char **argv)
 
     // print score
     double tempoFinal = fim - inicio;
-    printf("\nScore: %d tempo: %0.8f\n", score, tempoFinal);
-    // printf("%0.8f", tempoFinal);
+    // printf("\nScore: %d tempo: %0.8f\n", score, tempoFinal);
+    printf("%0.8f\n", tempoFinal);
     //  free score matrix
     freeScoreMatrix(scoreMatrix, sizeB);
 

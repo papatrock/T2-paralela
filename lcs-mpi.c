@@ -97,8 +97,7 @@ void initScoreMatrix(mtype **scoreMatrix, int sizeA, int sizeB)
 
 mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, char *seqB, int sizeB)
 {
-
-    // setup cart
+    // setup chart
     MPI_Comm comm_cart;
     int ndims = 2, dims[2] = {2, 3}, periods[2] = {0, 0}, reorder = 1;
     MPI_Cart_create(comm_world, ndims, dims, periods, reorder, &comm_cart);
@@ -113,7 +112,7 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
     MPI_Cart_shift(comm_cart, 0, -1, &rank_down, &rank_up);
     MPI_Cart_shift(comm_cart, 1, -1, &rank_right, &rank_left);
 
-    // --- alocacao local ---
+    // alocacao local
     int size_A_borda = sizeA + 1;
     int size_B_borda = sizeB + 1;
     int start_col = (my_coords[1] * size_A_borda) / dims[1];
@@ -124,71 +123,70 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
     int local_rows = end_row - start_row + 1;
     mtype **matriz_local = alocar_matriz_local(local_rows, local_cols);
 
-    int total_diagonals = dims[0] + dims[1] - 1;
-    for (int d = 0; d < total_diagonals; d++)
-    {
-        if (my_coords[0] + my_coords[1] == d)
-        {
-            if (rank_up != MPI_PROC_NULL)
-            {
-                mtype temp_row_buffer[local_cols];
-                MPI_Recv(temp_row_buffer, local_cols, MPI_UNSIGNED_SHORT, rank_up, d, comm_cart, MPI_STATUS_IGNORE);
-                for (int j = 0; j < local_cols; ++j)
-                    matriz_local[0][j + 1] = temp_row_buffer[j];
-            }
-            if (rank_left != MPI_PROC_NULL)
-            {
-                mtype temp_col_buffer[local_rows];
-                MPI_Recv(temp_col_buffer, local_rows, MPI_UNSIGNED_SHORT, rank_left, d, comm_cart, MPI_STATUS_IGNORE);
-                for (int i = 0; i < local_rows; ++i)
-                    matriz_local[i + 1][0] = temp_col_buffer[i];
-            }
+    // int total_diagonals = dims[0] + dims[1] - 1;
 
-            for (int i = 1; i <= local_rows; i++)
+    for (int bi = 0; bi < dims[0]; bi++)
+    {
+        for (int bj = 0; bj < dims[1]; bj++)
+        {
+            // Verifica se EU sou o processo responsável por este bloco
+            if (my_coords[0] == bi && my_coords[1] == bj)
             {
-                for (int j = 1; j <= local_cols; j++)
+                // 1. RECEBE dados se não estiver na borda global
+                if (rank_up != MPI_PROC_NULL)
                 {
-                    int global_j = start_col + j - 1;
-                    int global_i = start_row + i - 1;
-                    if (global_j < sizeA && global_i < sizeB && seqA[global_j] == seqB[global_i])
+                    MPI_Recv(&matriz_local[0][1], local_cols, MPI_UNSIGNED_SHORT, rank_up, 0, comm_cart, MPI_STATUS_IGNORE);
+                }
+                if (rank_left != MPI_PROC_NULL)
+                {
+                    mtype temp_col_buffer[local_rows];
+                    MPI_Recv(temp_col_buffer, local_rows, MPI_UNSIGNED_SHORT, rank_left, 1, comm_cart, MPI_STATUS_IGNORE);
+                    for (int i = 0; i < local_rows; ++i)
+                        matriz_local[i + 1][0] = temp_col_buffer[i];
+                }
+
+                // 2. CALCULA o bloco local
+                for (int i = 1; i <= local_rows; i++)
+                {
+                    for (int j = 1; j <= local_cols; j++)
                     {
-                        matriz_local[i][j] = matriz_local[i - 1][j - 1] + 1;
-                    }
-                    else
-                    {
-                        matriz_local[i][j] = max(matriz_local[i - 1][j], matriz_local[i][j - 1]);
+                        int global_j = start_col + j - 1;
+                        int global_i = start_row + i - 1;
+                        if (global_j < sizeA && global_i < sizeB && seqA[global_j] == seqB[global_i])
+                        {
+                            matriz_local[i][j] = matriz_local[i - 1][j - 1] + 1;
+                        }
+                        else
+                        {
+                            matriz_local[i][j] = max(matriz_local[i - 1][j], matriz_local[i][j - 1]);
+                        }
                     }
                 }
-            }
 
-            if (rank_down != MPI_PROC_NULL)
-            {
-                MPI_Send(&matriz_local[local_rows][1], local_cols, MPI_UNSIGNED_SHORT, rank_down, d + 1, comm_cart);
-            }
-            if (rank_right != MPI_PROC_NULL)
-            {
-                mtype temp_col_buffer[local_rows];
-                for (int i = 0; i < local_rows; ++i)
-                    temp_col_buffer[i] = matriz_local[i + 1][local_cols];
-                MPI_Send(temp_col_buffer, local_rows, MPI_UNSIGNED_SHORT, rank_right, d + 1, comm_cart);
+                // 3. ENVIA dados se não estiver na borda global
+                if (rank_down != MPI_PROC_NULL)
+                {
+                    MPI_Send(&matriz_local[local_rows][1], local_cols, MPI_UNSIGNED_SHORT, rank_down, 0, comm_cart);
+                }
+                if (rank_right != MPI_PROC_NULL)
+                {
+                    mtype temp_col_buffer[local_rows];
+                    for (int i = 0; i < local_rows; ++i)
+                        temp_col_buffer[i] = matriz_local[i + 1][local_cols];
+                    MPI_Send(temp_col_buffer, local_rows, MPI_UNSIGNED_SHORT, rank_right, 1, comm_cart);
+                }
             }
         }
-        MPI_Barrier(comm_cart);
     }
-
-    // --- COLETA DO RESULTADO FINAL ---
+    // ... O resto da função (coleta de resultado e limpeza) continua igual ...
     mtype final_score = 0;
-    if (my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1)
-    {
-        final_score = matriz_local[local_rows][local_cols];
-        if (my_rank != 0)
-        {
-            MPI_Send(&final_score, 1, MPI_UNSIGNED_SHORT, 0, 999, comm_world);
-        }
-    }
     if (my_rank == 0)
     {
-        if (!(my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1))
+        if (my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1)
+        {
+            final_score = matriz_local[local_rows][local_cols];
+        }
+        else
         {
             int rank_do_ultimo_proc;
             int coords_do_ultimo[2] = {dims[0] - 1, dims[1] - 1};
@@ -196,13 +194,19 @@ mtype LCS(MPI_Comm comm_world, int my_rank, int n_procs, char *seqA, int sizeA, 
             MPI_Recv(&final_score, 1, MPI_UNSIGNED_SHORT, rank_do_ultimo_proc, 999, comm_world, MPI_STATUS_IGNORE);
         }
     }
+    else
+    {
+        if (my_coords[0] == dims[0] - 1 && my_coords[1] == dims[1] - 1)
+        {
+            final_score = matriz_local[local_rows][local_cols];
+            MPI_Send(&final_score, 1, MPI_UNSIGNED_SHORT, 0, 999, comm_world);
+        }
+    }
 
-    // --- LIMPEZA ---
     for (int i = 0; i < local_rows + 2; i++)
         free(matriz_local[i]);
     free(matriz_local);
     MPI_Comm_free(&comm_cart);
-
     return final_score;
 }
 
@@ -301,8 +305,8 @@ int main(int argc, char **argv)
     // double tempoFinal = fim - inicio;
     if (my_rank == 0)
     {
-        printf("\nScore: %d\n", score);
-        printf("Tempo de execução: %f segundos\n", end_time - start_time);
+        // printf("\nScore: %d\n", score);
+        printf("%0.8f\n", end_time - start_time);
     }
     free(seqA);
     free(seqB);
