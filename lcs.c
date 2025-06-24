@@ -188,8 +188,10 @@ int main(int argc, char **argv)
     //  free score matrix
     freeScoreMatrix(scoreMatrix, sizeB);
     double tempoTotalFim = omp_get_wtime();
-    double fracSequencial = (tempoTotalFim - tempoTotalInicio) - tempoFinal;
-    printf("%0.8f\n", fracSequencial);
+    double tempo_parte_sequencial = (tempoTotalFim - tempoTotalInicio) - tempoFinal;
+
+    double b = tempo_parte_sequencial / (tempoTotalFim - tempoTotalInicio);
+    printf("%0.8f\n", b);
 
     return EXIT_SUCCESS;
 }

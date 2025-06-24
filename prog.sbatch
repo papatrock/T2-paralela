@@ -21,6 +21,6 @@
 
 # O mpirun usa a variavel $SLURM_NTASKS que o SLURM cria automaticamente.
 # O --map-by garante a distribuicao de 1 processo por no.
-mpirun -np $SLURM_NTASKS ./lcs-mpi entradas/40k_A.in entradas/40k_B.in >> saidas/escalabilidade_fraca/4_40k.out
+mpirun -np $SLURM_NTASKS ./lcs-mpi entradas/80k_A.in entradas/80k_B.in >> 6_80k.out
 
 #echo "Job finalizado em: $(date)"
